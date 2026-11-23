@@ -330,7 +330,7 @@ function rPegawai() {
   if (!sec.dataset.ready) {
     sec.dataset.ready = '1';
     sec.innerHTML = '<div class="page-head"><div><h1>Data Pegawai</h1><p class="muted sm">Kelola akun ASN dan admin. Pendaftaran akun dilakukan oleh admin.</p></div>' +
-      '<div class="head-actions"><button class="btn btn-secondary" data-act="goImport"><i class="bi bi-upload"></i> Impor</button><button class="btn btn-primary" data-act="addUser"><i class="bi bi-person-plus"></i> Tambah akun</button></div></div>' +
+      '<div class="head-actions"><button class="btn btn-secondary" data-act="goImport"><i class="bi bi-upload"></i> Impor data</button><button class="btn btn-primary" data-act="addUser"><i class="bi bi-person-plus"></i> Tambah akun</button></div></div>' +
       '<div class="card"><div class="toolbar" style="border-top:0"><div class="grow" style="max-width:360px"><input id="pgQ" class="input" type="search" placeholder="Cari nama, NIP, unit, username…" aria-label="Cari pegawai"></div>' +
       '<select id="pgPeran" class="select" aria-label="Filter peran"><option value="">Semua peran</option><option>ASN</option><option>Admin</option></select></div><div id="pgBody"></div></div>';
     $('#pgQ').addEventListener('input', debounce(e => { S.pf.q = e.target.value; S.pf.pg = 1; rPegawaiBody(); }, 200));
@@ -393,22 +393,39 @@ function resetPw(un) {
 
 // ── Pengaturan (admin) ──
 function rPengaturan() {
-  const sec = $('#p-pengaturan'), keep = S.imp;
-  sec.innerHTML = '<div class="page-head"><div><h1>Pengaturan</h1><p class="muted sm">Identitas aplikasi dan impor data pegawai.</p></div></div><div class="grid-2 even">' +
+  $('#p-pengaturan').innerHTML = '<div class="page-head"><div><h1>Pengaturan</h1><p class="muted sm">Identitas aplikasi.</p></div></div><div class="grid-2 even">' +
     '<form class="card" id="cfgForm" novalidate><div class="card-head"><h2>Identitas aplikasi</h2></div><div class="card-pad">' +
     '<div class="field"><label for="cfgName">Nama aplikasi<span class="req">*</span></label><input class="input" id="cfgName" maxlength="60" value="' + esc(S.cfg.appName) + '"><div class="err" id="e-cfgName" hidden></div></div>' +
     '<div class="field"><span class="lbl">Thumbnail / logo</span><div style="display:flex;gap:14px;align-items:center"><div class="thumb-prev" id="cfgPrev">' + (S.cfg.thumbnailUrl ? '<img alt="" src="' + esc(S.cfg.thumbnailUrl) + '">' : '<i class="bi bi-image"></i>') + '</div>' +
     '<div><label class="btn btn-secondary btn-sm" for="cfgThumb">Pilih gambar</label><input id="cfgThumb" class="vh" type="file" accept="image/png,image/jpeg,image/webp"><p class="hint" style="margin-top:6px">PNG/JPG/WebP. Otomatis diperkecil ke 256 px.</p></div></div></div>' +
-    '<button class="btn btn-primary" id="cfgSave" type="submit">Simpan pengaturan</button></div></form>' +
-    '<div class="card" id="impCard"><div class="card-head"><div><h2>Impor data pegawai</h2><p class="sm muted">Aman diulang: kunci NIP, tanpa data ganda, sumber hanya dibaca.</p></div><button class="btn btn-ghost btn-sm" data-act="tplCsv"><i class="bi bi-download"></i> Templat CSV</button></div><div class="card-pad">' +
-    '<div class="field"><span class="lbl">Sumber data</span><div class="tabs" style="padding:0" role="radiogroup"><button type="button" class="tab" role="radio" aria-checked="' + (keep.mode === 'csv') + '" aria-selected="' + (keep.mode === 'csv') + '" data-act="impMode" data-m="csv">Berkas CSV</button><button type="button" class="tab" role="radio" aria-checked="' + (keep.mode === 'sheet') + '" aria-selected="' + (keep.mode === 'sheet') + '" data-act="impMode" data-m="sheet">Spreadsheet lama</button></div></div>' +
-    (keep.mode === 'csv' ? '<div class="field"><label for="impFile">Berkas CSV</label><input class="input" type="file" id="impFile" accept=".csv,text/csv"><p class="hint" id="impFileInfo">' + (keep.csv ? 'Berkas siap dipindai.' : 'Kolom: NIP, Nama, Gelar Depan/Belakang, Tgl Lahir, Pangkat/Gol, Gol, Unit Kerja, Kecamatan, Email, Username.') + '</p></div>' :
-      '<div class="field"><label for="impRef">URL atau ID spreadsheet lama</label><input class="input" id="impRef" value="' + esc(keep.ref) + '" placeholder="https://docs.google.com/spreadsheets/d/…"><p class="hint">Hanya dibaca. Sheet bernama “Pengguna” (atau sheet pertama), akun Google pengelola harus punya akses.</p></div>') +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="impScan" data-act="impRun" data-dry="1">Pindai (tanpa menulis)</button><button class="btn btn-primary" id="impGo" data-act="impRun" data-dry="0">Jalankan impor</button></div><div id="impOut" style="margin-top:16px"></div></div></div></div>';
+    '<button class="btn btn-primary" id="cfgSave" type="submit">Simpan pengaturan</button></div></form></div>';
   $('#cfgForm').addEventListener('submit', saveCfg);
   $('#cfgThumb').addEventListener('change', onThumb);
-  const f = $('#impFile'); if (f) f.addEventListener('change', e => { const file = e.target.files[0]; if (!file) return; const r = new FileReader(); r.onload = () => { S.imp.csv = String(r.result); $('#impFileInfo').textContent = file.name + ' (' + Math.round(file.size / 1024) + ' KB) siap dipindai.'; }; r.readAsText(file); });
+}
+// ── Impor data pegawai: popup di halaman Data Pegawai ──
+function impBodyHTML() {
+  const keep = S.imp, csv = keep.mode === 'csv';
+  return '<div class="field"><span class="lbl">Sumber data</span><div class="tabs" style="padding:0" role="radiogroup"><button type="button" class="tab" role="radio" aria-checked="' + csv + '" aria-selected="' + csv + '" data-act="impMode" data-m="csv">Berkas Excel / CSV</button><button type="button" class="tab" role="radio" aria-checked="' + !csv + '" aria-selected="' + !csv + '" data-act="impMode" data-m="sheet">Spreadsheet lama</button></div></div>' +
+    (csv ? '<div class="field"><label for="impFile">Berkas Excel / CSV</label><input class="input" type="file" id="impFile" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"><p class="hint" id="impFileInfo">' + (keep.csv ? 'Berkas siap dipindai.' : 'Gunakan Templat Excel (tombol di bawah). Format .xlsx, .xls, atau .csv.') + '</p></div>' :
+      '<div class="field"><label for="impRef">URL atau ID spreadsheet lama</label><input class="input" id="impRef" value="' + esc(keep.ref) + '" placeholder="https://docs.google.com/spreadsheets/d/…"><p class="hint">Hanya dibaca. Sheet bernama “Pengguna” (atau sheet pertama), akun Google pengelola harus punya akses.</p></div>') +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="impScan" data-act="impRun" data-dry="1">Pindai (tanpa menulis)</button><button class="btn btn-primary" id="impGo" data-act="impRun" data-dry="0">Jalankan impor</button></div><div id="impOut" style="margin-top:16px"></div>';
+}
+function bindImp() {
+  const f = $('#impFile'); if (f) f.addEventListener('change', e => {
+    const file = e.target.files[0]; if (!file) return; const info = $('#impFileInfo'), r = new FileReader(), excel = /\.xlsx?$/i.test(file.name);
+    r.onload = () => {
+      try { S.imp.csv = excel ? xlsxKeCsv(r.result) : String(r.result); info.textContent = file.name + ' (' + Math.round(file.size / 1024) + ' KB) siap dipindai.'; }
+      catch (x) { S.imp.csv = ''; info.textContent = x.ramah ? x.message : 'Berkas tidak dapat dibaca. Pastikan berkas Excel/CSV yang valid.'; }
+    };
+    r.onerror = () => { S.imp.csv = ''; info.textContent = 'Gagal membaca berkas.'; };
+    if (excel) { if (!window.XLSX) { info.textContent = 'Pustaka Excel belum termuat. Coba lagi sebentar atau gunakan CSV.'; return; } r.readAsArrayBuffer(file); } else r.readAsText(file);
+  });
   const rf = $('#impRef'); if (rf) rf.addEventListener('input', e => S.imp.ref = e.target.value);
+}
+function openImport() {
+  openModal(mHead('Impor data pegawai', 'Aman diulang: kunci NIP, tanpa data ganda, sumber hanya dibaca.') + '<div class="modal-body"><div id="impCard">' + impBodyHTML() + '</div></div>' +
+    '<div class="modal-foot"><button class="btn btn-ghost btn-sm" data-act="tplXlsx" style="margin-right:auto"><i class="bi bi-file-earmark-excel"></i> Templat Excel</button><button class="btn btn-secondary" data-act="closeModal">Tutup</button></div>', { size: 'lg' });
+  bindImp();
 }
 let thumbData = '';
 function onThumb(e) {
@@ -425,6 +442,41 @@ function saveCfg(ev) {
   const btn = $('#cfgSave'); btn.disabled = true; btn.innerHTML = '<span class="spin sm"></span> Menyimpan…';
   api('apiSimpanPengaturan', S.token, { appName: nama, thumbBase64: thumbData }).then(r => { S.cfg = r.data; thumbData = ''; applyBrand(); persist(); toast('Pengaturan disimpan.'); })
     .catch(e => toast(e.message, 'error')).finally(() => { btn.disabled = false; btn.textContent = 'Simpan pengaturan'; });
+}
+/** Templat Excel impor pegawai: sheet "Data Pegawai" (kolom berformat TEKS agar NIP 18 digit utuh) + sheet "Petunjuk" */
+const KOLOM_IMPOR = ['NIP', 'Gelar Depan', 'Nama', 'Gelar Belakang', 'Tgl Lahir', 'Pangkat/Gol', 'Gol', 'Unit Kerja', 'Kecamatan', 'Email', 'Username'];
+function tplXlsx() {
+  if (!window.XLSX) { toast('Pustaka Excel belum termuat. Coba lagi sebentar.', 'warn'); return; }
+  const BARIS = 300, ws = {};
+  KOLOM_IMPOR.forEach((h, c) => { ws[XLSX.utils.encode_cell({ r: 0, c: c })] = { t: 's', v: h }; for (let r = 1; r <= BARIS; r++) ws[XLSX.utils.encode_cell({ r: r, c: c })] = { t: 's', v: '', z: '@' }; });
+  ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: BARIS, c: KOLOM_IMPOR.length - 1 } });
+  ws['!cols'] = [22, 12, 28, 14, 13, 22, 8, 28, 16, 26, 16].map(w => ({ wch: w })); ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+  const ins = XLSX.utils.aoa_to_sheet([
+    ['PETUNJUK PENGISIAN'], ['Isi data pada sheet "Data Pegawai" mulai baris 2. Jangan mengubah / menghapus judul kolom di baris 1.'], [],
+    ['Kolom', 'Wajib?', 'Keterangan', 'Contoh'],
+    ['NIP', 'Ya', '18 digit angka (kolom sudah berformat teks, jangan diubah)', '198501012010011001'],
+    ['Gelar Depan', 'Tidak', '', 'Dr.'], ['Nama', 'Ya', 'Nama tanpa gelar', 'Contoh Nama'], ['Gelar Belakang', 'Tidak', '', 'M.Pd.'],
+    ['Tgl Lahir', 'Tidak', 'Format yyyy-mm-dd atau dd/mm/yyyy', '1985-01-01'], ['Pangkat/Gol', 'Tidak', '', 'Penata Tingkat I'], ['Gol', 'Tidak', '', 'III/d'],
+    ['Unit Kerja', 'Tidak', '', 'Dinas Pendidikan'], ['Kecamatan', 'Tidak', '', 'Bojonegoro'], ['Email', 'Disarankan', 'Untuk email konfirmasi usulan', 'contoh@email.go.id'],
+    ['Username', 'Tidak', 'Kosong = otomatis memakai NIP', 'contoh.nama'], [],
+    ['Catatan', '', 'Pegawai yang NIP-nya sudah terdaftar hanya diperbarui data dirinya (kata sandi, peran, dan status akun tidak berubah). Gunakan tombol "Pindai" dulu sebelum "Jalankan impor".']]);
+  ins['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 60 }, { wch: 24 }];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Data Pegawai'); XLSX.utils.book_append_sheet(wb, ins, 'Petunjuk');
+  saveBlob(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'templat_impor_pegawai.xlsx');
+  toast('Templat Excel diunduh.');
+}
+/** Excel (.xlsx/.xls) → teks CSV di peramban, lalu memakai jalur impor yang sama (backend tidak berubah) */
+function xlsxKeCsv(buf) {
+  const wb = XLSX.read(buf, { type: 'array', cellNF: true });          // tanpa cellDates: tanggal tetap berupa nomor seri (bebas masalah zona waktu)
+  const nama = wb.SheetNames.filter(n => n.toLowerCase() !== 'petunjuk')[0] || wb.SheetNames[0], ws = wb.Sheets[nama];
+  if (XLSX.SSF && XLSX.SSF.is_date) Object.keys(ws).forEach(k => {      // sel bertanggal → teks yyyy-mm-dd persis seperti yang tampil di Excel
+    const c = ws[k]; if (k[0] === '!' || !c || c.t !== 'n' || !c.z || !XLSX.SSF.is_date(c.z)) return;
+    const p = XLSX.SSF.parse_date_code(c.v); if (!p) return;
+    c.t = 's'; c.v = p.y + '-' + pad(p.m) + '-' + pad(p.d); c.w = c.v; delete c.z;
+  });
+  const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false }).split(/\r?\n/).filter(l => /[^,\s"]/.test(l)).join('\n');   // buang baris kosong templat
+  if (!/(^|,)"?nip"?(,|$)/i.test((csv.split('\n')[0] || '').trim())) { const er = new Error('Kolom "NIP" tidak ditemukan di baris pertama. Gunakan Templat Excel dan jangan ubah judul kolomnya.'); er.ramah = true; throw er; }
+  return csv;
 }
 function impRun(dry) {
   const body = { sumber: S.imp.mode, csv: S.imp.csv, sheetRef: S.imp.ref, dryRun: dry }, out = $('#impOut');
@@ -578,7 +630,7 @@ function openDetail(id) {
     '<div><h4>Data KGB</h4><div class="tbl-wrap"><table class="cmp"><tr><th>Komponen</th><th>Lama</th><th>Baru</th></tr>' + row('Gaji pokok', rp(us.GajiPokokLama), rp(us.GajiPokokBaru) + ' <span class="up xs">(' + (sel >= 0 ? '+' : '−') + rp(Math.abs(sel)) + ')</span>') +
     row('Masa kerja', esc(us.MasaKerjaLama), esc(us.MasaKerjaBaru)) + row('TMT berkala', tgl(us.TMTBerkalaLama), tgl(us.TMTBerkalaBaru)) + '</table></div>' +
     '<dl class="kv" style="margin:12px 0 0"><div><dt>Atas dasar surat</dt><dd>' + esc(us.AtasDasarSurat) + '</dd></div><div><dt>Nomor berkala lama</dt><dd>' + esc(us.NomorBerkalaLama) + '</dd></div><div><dt>Tanggal berkala lama</dt><dd>' + tgl(us.TanggalBerkalaLama) + '</dd></div><div><dt>Masa kerja berkala lama</dt><dd>' + esc(us.MasaKerjaBerkalaLama) + '</dd></div></dl></div>' +
-    '<div><h4>Berkas persyaratan</h4><div class="files">' + (docs.length ? docs.map(d => '<div class="file"><i class="bi bi-file-earmark-pdf-fill"></i><div class="grow"><strong>' + esc(d.Jenis) + '</strong><span>' + esc(d.NamaFile) + '</span></div><button class="btn btn-outline btn-sm" data-act="preview" data-f="' + esc(d.FileId) + '" data-n="' + esc(d.NamaFile) + '">Pratinjau</button></div>').join('') : '<p class="sm muted">Tidak ada berkas.</p>') + '</div></div>' +
+    '<div><h4>Berkas persyaratan</h4><div class="files">' + (docs.length ? docs.map(d => '<div class="file"><i class="bi bi-file-earmark-pdf-fill"></i><div class="grow"><button type="button" class="link" data-act="preview" data-f="' + esc(d.FileId) + '" data-n="' + esc(d.NamaFile) + '">' + esc(d.Jenis) + '</button><span style="display:block">' + esc(d.NamaFile) + '</span></div><button class="btn btn-outline btn-sm" data-act="preview" data-f="' + esc(d.FileId) + '" data-n="' + esc(d.NamaFile) + '">Pratinjau</button></div>').join('') : '<p class="sm muted">Tidak ada berkas.</p>') + '</div></div>' +
     (!ad && us.CatatanAdmin ? '<div class="note"><b>Catatan admin:</b> ' + esc(us.CatatanAdmin) + '</div>' : '') +
     (ad ? '<div class="field" style="margin:0"><label for="catatan">Catatan untuk ASN <span class="muted" style="font-weight:400">(wajib bila menolak / minta perbaikan)</span></label><textarea class="textarea" id="catatan" maxlength="500">' + esc(us.CatatanAdmin) + '</textarea><div class="err" id="e-catatan" hidden></div></div>' : '') +
     '<div><h4>Riwayat</h4><ul class="tl">' + (hist.length ? hist.map(h => '<li><b>' + esc(h.Aksi) + '</b><time>' + tglJam(h.Tanggal) + ' • ' + esc(h.Pengguna) + '</time></li>').join('') : '<li>Belum ada riwayat.</li>') + '</ul></div></div>' +
@@ -600,12 +652,12 @@ function putusan(id, aksi, undo) {
   if (!undo) toast('Usulan ' + id + ' → ' + status + '.', 'success', { label: 'Urungkan', fn: () => putusan(id, STATUS_AKSI[prev.Status], { catatan: prev.CatatanAdmin }) });
 }
 function preview(fileId, nama) {
-  openModal(mHead('Pratinjau berkas', esc(nama)) + '<div class="modal-body"><div id="pvBox" class="empty"><span class="spin"></span><p class="sm" style="margin-top:8px">Memuat berkas…</p></div><p class="hint">Jika pratinjau tidak tampil di peramban Anda, gunakan tombol Unduh.</p></div><div class="modal-foot"><button class="btn btn-secondary" data-act="closeModal">Tutup</button><a id="pvDl" class="btn btn-primary" download="' + esc(nama) + '" hidden><i class="bi bi-download"></i> Unduh</a></div>', { size: 'lg' });
+  openModal(mHead('Pratinjau berkas', esc(nama)) + '<div class="modal-body"><div id="pvBox" class="empty"><span class="spin"></span><p class="sm" style="margin-top:8px">Memuat berkas…</p></div><p class="hint">Jika pratinjau tidak tampil di peramban Anda, gunakan tombol Unduh.</p></div><div class="modal-foot"><button class="btn btn-secondary" data-act="closeModal">Tutup</button><button type="button" id="pvDl" class="btn btn-primary" data-act="dlPdf" hidden><i class="bi bi-download"></i> Unduh</button></div>', { size: 'lg' });
   api('apiAmbilBerkas', S.token, fileId).then(r => {
     const bin = atob(r.data.base64), arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-    const url = URL.createObjectURL(new Blob([arr], { type: 'application/pdf' })); S.blobs.push(url);
+    const blob = new Blob([arr], { type: 'application/pdf' }), url = URL.createObjectURL(blob); S.blobs.push(url);
     const box = $('#pvBox'); if (!box) { return; } box.outerHTML = '<iframe class="pdf-frame" src="' + url + '" title="Pratinjau ' + esc(nama) + '"></iframe>';
-    const a = $('#pvDl'); if (a) { a.href = url; a.hidden = false; }
+    S.pv = { blob: blob, name: r.data.nama || nama }; const a = $('#pvDl'); if (a) a.hidden = false;
   }).catch(e => { const b = $('#pvBox'); if (b) b.innerHTML = '<i class="bi bi-exclamation-triangle"></i><p class="sm">' + esc(e.message) + '</p>'; });
 }
 
@@ -642,7 +694,7 @@ function gantiSandi() {
 
 // ═════════════════════ EVENT DELEGASI ═════════════════════
 const ACT = {
-  go: el => go(el.dataset.page), goImport: () => { go('pengaturan'); setTimeout(() => { const c = $('#impCard'); if (c) c.scrollIntoView({ behavior: 'smooth' }); }, 50); },
+  go: el => go(el.dataset.page), goImport: openImport,
   openMenu, closeMenu, closeModal,
   theme: () => applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'),
   refresh: () => refresh(false),
@@ -658,12 +710,15 @@ const ACT = {
   export: el => exportExcel(el.dataset.scope),
   addUser: () => userForm(null), editUser: el => userForm(S.users.find(u => u.Username === el.dataset.u)), resetPw: el => resetPw(el.dataset.u),
   copy: el => copyText(el.dataset.v),
-  impMode: el => { S.imp.mode = el.dataset.m; rPengaturan(); }, impRun: el => impRun(el.dataset.dry === '1'),
-  tplCsv: () => saveBlob(new Blob([toCSV([['NIP', 'Gelar Depan', 'Nama', 'Gelar Belakang', 'Tgl Lahir', 'Pangkat/Gol', 'Gol', 'Unit Kerja', 'Kecamatan', 'Email', 'Username'], ['198501012010011001', 'Dr.', 'Contoh Nama', 'M.Pd.', '1985-01-01', 'Penata Tingkat I', 'III/d', 'Dinas Pendidikan', 'Bojonegoro', 'contoh@email.go.id', 'contoh.nama']])], { type: 'text/csv' }), 'templat_impor_pegawai.csv'),
+  impMode: el => { S.imp.mode = el.dataset.m; $('#impCard').innerHTML = impBodyHTML(); bindImp(); }, impRun: el => impRun(el.dataset.dry === '1'),
+  dlPdf: () => { if (S.pv) saveBlob(S.pv.blob, S.pv.name); },
+  tplXlsx: tplXlsx,
   redo: el => { const us = S.usulan.find(x => x.IDUsulan === el.dataset.id); closeModal(); $('#p-ajukan').dataset.ready = ''; go('ajukan', { prefill: us }); if (us) toast('Data usulan sebelumnya disalin. Perbarui, unggah ulang berkas, lalu kirim.', 'success'); },
   clearDraft: () => { store.del(draftKey()); S.draft = null; S.up = {}; $('#p-ajukan').dataset.ready = ''; rAjukan(); toast('Formulir dikosongkan.'); }
 };
 document.addEventListener('click', e => {
+  const lnk = e.target.closest && e.target.closest('a[href]');   // pengaman: tidak ada tautan yang boleh pindah tab/halaman
+  if (lnk && !lnk.hasAttribute('download') && !/^#/.test(lnk.getAttribute('href'))) { e.preventDefault(); return; }
   const el = e.target.closest('[data-act]');
   if (el && ACT[el.dataset.act]) { e.preventDefault(); ACT[el.dataset.act](el); return; }
   if (e.target.classList && e.target.classList.contains('overlay')) closeModal();
