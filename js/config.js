@@ -4,6 +4,6 @@
    Cara dapat: Apps Script → Deploy → Kelola deployment → salin "URL aplikasi web"
    ============================================================ */
 window.APP_CONFIG = {
-  GAS_URL: 'https://script.google.com/macros/s/AKfycbxwMqTf2a_u3_L-76yut9pEkyCfcH7I3B4w3EpRw78jtJkCk3dA0CGGnu_yOLHMYfnrPg/exec',
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbxGddJ9K4dQyIfL97IgJ2tekNzYkYkUzXeOU2HjPl0S9BKO65uM-3-GsbwIoXQpEse8/exec',
   TIMEOUT_MS: 90000   // batas tunggu per permintaan (unggah PDF bisa lama di jaringan lambat)
 };

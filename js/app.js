@@ -94,7 +94,7 @@ async function kirim(fn, args) {
   } finally { clearTimeout(to); }
 }
 function api(fn) {
-  const args = Array.prototype.slice.call(arguments, 1), baca = fn === 'apiBoot';     // hanya operasi baca yang aman diulang
+  const args = Array.prototype.slice.call(arguments, 1), baca = fn === 'apiBoot' || fn === 'apiLogin';     // hanya operasi baca/login yang aman diulang
   S.pending++; setSync('busy');
   const run = n => kirim(fn, args).catch(e => { if (baca && n < 1 && !e.fatal && e.name !== 'AbortError') return run(n + 1); throw e; });
   return run(0).then(r => {
@@ -104,8 +104,34 @@ function api(fn) {
     return r;
   }, e => {
     S.pending--; setSync('off');
-    throw new Error(e.name === 'AbortError' ? 'Server terlalu lama merespons. Coba lagi.' : (e.fatal || /^KONFIG/.test(e.message)) ? e.message : 'Koneksi bermasalah. Periksa jaringan Anda lalu coba lagi.');
+    throw new Error(e.name === 'AbortError' ? 'Server terlalu lama merespons. Coba lagi.' : (e.fatal || /^KONFIG/.test(e.message)) ? e.message : 'Koneksi bermasalah. Periksa jaringan Anda lalu coba lagi. [' + (e.name || 'Error') + ': ' + (e.message || '?') + '] Ketuk “Uji koneksi ke server” di bawah untuk diagnosa.');
   });
+}
+/** Diagnosa koneksi ke backend: memeriksa GET dan POST secara terpisah dan menampilkan penyebab yang terlihat */
+async function diagnosa() {
+  const hasil = [], add = (ok, judul, det) => hasil.push({ ok: ok, judul: judul, det: det });
+  const ov = openModal(mHead('Uji koneksi ke server', 'Memeriksa alamat backend dan metode pengiriman data') + '<div class="modal-body"><div id="dgBox" class="empty"><span class="spin"></span><p class="sm" style="margin-top:8px">Menguji…</p></div></div><div class="modal-foot"><button class="btn btn-secondary" data-act="closeModal">Tutup</button></div>', { size: 'sm' });
+  const potong = t => String(t).replace(/\s+/g, ' ').slice(0, 140);
+  if (!gasOk()) add(false, 'Alamat backend (GAS_URL)', 'Belum diisi / formatnya salah di js/config.js. Harus berbentuk https://script.google.com/macros/s/…/exec');
+  else {
+    add(true, 'Alamat backend (GAS_URL)', CFG.GAS_URL.replace(/(macros\/s\/.{6}).*(\/exec)/, '$1…$2'));
+    try {
+      const t0 = Date.now(), r = await fetch(CFG.GAS_URL + '?action=ping'), tx = await r.text(); let js = null; try { js = JSON.parse(tx); } catch (x) { /* bukan JSON */ }
+      if (js && js.success) add(true, 'GET (baca identitas aplikasi)', 'OK • API v' + ((js.data || {}).versi || '?') + ' • ' + (Date.now() - t0) + ' ms'); else add(false, 'GET (baca identitas aplikasi)', 'HTTP ' + r.status + '. Respons bukan JSON API: “' + potong(tx) + '”');
+    } catch (e) { add(false, 'GET (baca identitas aplikasi)', e.name + ': ' + e.message + ' — alamat salah, deployment bukan “Anyone”, atau diblokir peramban/ekstensi.'); }
+    try {
+      const t0 = Date.now(), r = await fetch(CFG.GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'apiUji', args: [] }) }), tx = await r.text(); let js = null; try { js = JSON.parse(tx); } catch (x) { /* bukan JSON */ }
+      if (js) add(true, 'POST (kirim data / login)', 'OK • server menjawab JSON (' + (Date.now() - t0) + ' ms)'); else add(false, 'POST (kirim data / login)', 'HTTP ' + r.status + '. Server menjawab halaman, bukan JSON: “' + potong(tx) + '”');
+    } catch (e) { add(false, 'POST (kirim data / login)', e.name + ': ' + e.message + ' — POST diblokir/ditolak.'); }
+  }
+  const g = hasil[1], p = hasil[2];
+  const saran = !gasOk() ? 'Perbaiki js/config.js lalu push ulang.' :
+    g && !g.ok ? 'Alamat /exec tidak dapat diakses dari peramban. Periksa: (1) URL disalin dari Deploy → Kelola deployment, berakhiran /exec (bukan /dev); (2) “Who has access” = Anyone; (3) matikan sementara ekstensi pemblokir iklan/privasi.' :
+    p && !p.ok ? 'Alamat benar tetapi POST gagal. Penyebab tersering: (1) deployment belum diperbarui — Deploy → Kelola deployment → ✏️ → Versi: Versi baru → Deploy; (2) otorisasi ulang belum dilakukan — jalankan fungsi setupAppEnvironment di editor lalu setujui izin; (3) kode backend yang ditempel bukan Kode.gs versi 2.0 (harus ada fungsi doPost). Kirim hasil uji ini agar bisa dipastikan.' :
+    'Koneksi ke server normal. Jika login tetap gagal, periksa nama pengguna/kata sandi atau coba lagi.';
+  const box = $('#dgBox'); if (!box) return;
+  box.className = ''; box.innerHTML = hasil.map(h => '<div class="alert ' + (h.ok ? 'ok-a' : 'err-a') + '" style="margin-bottom:10px"><i class="bi ' + (h.ok ? 'bi-check-circle' : 'bi-x-octagon') + '"></i><span><b>' + esc(h.judul) + '</b><br>' + esc(h.det) + '</span></div>').join('') +
+    '<div class="note"><b>Saran:</b> ' + esc(saran) + '</div>';
 }
 function refresh(silent) {
   if (!S.token || S.mut > 0) return Promise.resolve();
@@ -699,6 +725,7 @@ const ACT = {
   openMenu, closeMenu, closeModal,
   theme: () => applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'),
   refresh: () => refresh(false),
+  diag: diagnosa,
   profileMenu: el => { const m = $('#profileMenu'); m.hidden = !m.hidden; el.setAttribute('aria-expanded', String(!m.hidden)); },
   gantiSandi: () => { closeProfile(); gantiSandi(); },
   logout: () => { closeProfile(); forceLogout('Anda telah keluar.'); },
