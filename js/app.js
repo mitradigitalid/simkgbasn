@@ -405,20 +405,21 @@ function rPengaturan() {
 // ── Impor data pegawai: popup di halaman Data Pegawai ──
 function impBodyHTML() {
   const keep = S.imp, csv = keep.mode === 'csv';
-  return '<div class="field"><span class="lbl">Sumber data</span><div class="tabs" style="padding:0" role="radiogroup"><button type="button" class="tab" role="radio" aria-checked="' + csv + '" aria-selected="' + csv + '" data-act="impMode" data-m="csv">Berkas Excel / CSV</button><button type="button" class="tab" role="radio" aria-checked="' + !csv + '" aria-selected="' + !csv + '" data-act="impMode" data-m="sheet">Spreadsheet lama</button></div></div>' +
-    (csv ? '<div class="field"><label for="impFile">Berkas Excel / CSV</label><input class="input" type="file" id="impFile" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"><p class="hint" id="impFileInfo">' + (keep.csv ? 'Berkas siap dipindai.' : 'Gunakan Templat Excel (tombol di bawah). Format .xlsx, .xls, atau .csv.') + '</p></div>' :
+  return '<div class="field"><span class="lbl">Sumber data</span><div class="tabs" style="padding:0" role="radiogroup"><button type="button" class="tab" role="radio" aria-checked="' + csv + '" aria-selected="' + csv + '" data-act="impMode" data-m="csv">Berkas Excel</button><button type="button" class="tab" role="radio" aria-checked="' + !csv + '" aria-selected="' + !csv + '" data-act="impMode" data-m="sheet">Spreadsheet lama</button></div></div>' +
+    (csv ? '<div class="field"><label for="impFile">Berkas Excel (.xlsx / .xls)</label><input class="input" type="file" id="impFile" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"><p class="hint" id="impFileInfo">' + (keep.csv ? 'Berkas siap dipindai.' : 'Gunakan Templat Excel (tombol di bawah). Format .xlsx atau .xls.') + '</p></div>' :
       '<div class="field"><label for="impRef">URL atau ID spreadsheet lama</label><input class="input" id="impRef" value="' + esc(keep.ref) + '" placeholder="https://docs.google.com/spreadsheets/d/…"><p class="hint">Hanya dibaca. Sheet bernama “Pengguna” (atau sheet pertama), akun Google pengelola harus punya akses.</p></div>') +
     '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="impScan" data-act="impRun" data-dry="1">Pindai (tanpa menulis)</button><button class="btn btn-primary" id="impGo" data-act="impRun" data-dry="0">Jalankan impor</button></div><div id="impOut" style="margin-top:16px"></div>';
 }
 function bindImp() {
   const f = $('#impFile'); if (f) f.addEventListener('change', e => {
     const file = e.target.files[0]; if (!file) return; const info = $('#impFileInfo'), r = new FileReader(), excel = /\.xlsx?$/i.test(file.name);
+    if (!excel) { S.imp.csv = ''; info.textContent = 'Format tidak didukung. Gunakan Templat Excel (.xlsx atau .xls).'; e.target.value = ''; return; }
     r.onload = () => {
       try { S.imp.csv = excel ? xlsxKeCsv(r.result) : String(r.result); info.textContent = file.name + ' (' + Math.round(file.size / 1024) + ' KB) siap dipindai.'; }
-      catch (x) { S.imp.csv = ''; info.textContent = x.ramah ? x.message : 'Berkas tidak dapat dibaca. Pastikan berkas Excel/CSV yang valid.'; }
+      catch (x) { S.imp.csv = ''; info.textContent = x.ramah ? x.message : 'Berkas tidak dapat dibaca. Pastikan berkas Excel (.xlsx / .xls) yang valid.'; }
     };
     r.onerror = () => { S.imp.csv = ''; info.textContent = 'Gagal membaca berkas.'; };
-    if (excel) { if (!window.XLSX) { info.textContent = 'Pustaka Excel belum termuat. Coba lagi sebentar atau gunakan CSV.'; return; } r.readAsArrayBuffer(file); } else r.readAsText(file);
+    { if (!window.XLSX) { info.textContent = 'Pustaka Excel belum termuat. Coba lagi beberapa detik lagi.'; return; } r.readAsArrayBuffer(file); }
   });
   const rf = $('#impRef'); if (rf) rf.addEventListener('input', e => S.imp.ref = e.target.value);
 }
@@ -465,7 +466,7 @@ function tplXlsx() {
   saveBlob(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'templat_impor_pegawai.xlsx');
   toast('Templat Excel diunduh.');
 }
-/** Excel (.xlsx/.xls) → teks CSV di peramban, lalu memakai jalur impor yang sama (backend tidak berubah) */
+/** Excel (.xlsx/.xls) → teks di peramban, lalu memakai jalur impor yang sama (backend tidak berubah) */
 function xlsxKeCsv(buf) {
   const wb = XLSX.read(buf, { type: 'array', cellNF: true });          // tanpa cellDates: tanggal tetap berupa nomor seri (bebas masalah zona waktu)
   const nama = wb.SheetNames.filter(n => n.toLowerCase() !== 'petunjuk')[0] || wb.SheetNames[0], ws = wb.Sheets[nama];
@@ -480,7 +481,7 @@ function xlsxKeCsv(buf) {
 }
 function impRun(dry) {
   const body = { sumber: S.imp.mode, csv: S.imp.csv, sheetRef: S.imp.ref, dryRun: dry }, out = $('#impOut');
-  if (S.imp.mode === 'csv' && !S.imp.csv) { out.innerHTML = '<div class="alert err-a"><i class="bi bi-exclamation-circle"></i><span>Pilih berkas CSV terlebih dahulu.</span></div>'; return; }
+  if (S.imp.mode === 'csv' && !S.imp.csv) { out.innerHTML = '<div class="alert err-a"><i class="bi bi-exclamation-circle"></i><span>Pilih berkas Excel terlebih dahulu.</span></div>'; return; }
   if (S.imp.mode === 'sheet' && !S.imp.ref.trim()) { out.innerHTML = '<div class="alert err-a"><i class="bi bi-exclamation-circle"></i><span>Isi URL atau ID spreadsheet.</span></div>'; return; }
   $$('#impCard .btn').forEach(b => b.disabled = true); out.innerHTML = '<span class="spin"></span> <span class="muted">' + (dry ? 'Memindai…' : 'Mengimpor — mohon tunggu, jangan tutup halaman…') + '</span>';
   api('apiImportPengguna', S.token, body).then(r => {
